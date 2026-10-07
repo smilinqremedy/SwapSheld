@@ -56,6 +56,7 @@ export interface User {
   bank_code?: string;
   bank_name?: string;
   recipient_code?: string;
+  paystack_recipient_code?: string;
   created_at: string;
   updated_at: string;
 }

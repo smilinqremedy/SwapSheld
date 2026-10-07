@@ -31,6 +31,7 @@ import {
 import { evaluateDevice } from '@/lib/valuation-engine';
 import { compressImageWithStats, formatFileSize } from '@/lib/image-compressor';
 import { validateIMEI, formatIMEI } from '@/lib/imei-validator';
+import { BankVerificationCard, VerifiedRecipientData } from '@/components/BankVerificationCard';
 
 interface ListingWizardProps {
   currentUser: User;
@@ -101,6 +102,19 @@ export const ListingWizard: React.FC<ListingWizardProps> = ({
 
   // IMEI Luhn validator for Step 1
   const wizardImeiValidation = imeiOrSerial.trim() ? validateIMEI(imeiOrSerial) : null;
+
+  // Seller Automated Bank Payout Recipient (Required for Step 4)
+  const [bankRecipient, setBankRecipient] = useState<VerifiedRecipientData | null>(
+    (currentUser.recipient_code || currentUser.paystack_recipient_code) && currentUser.bank_account_number
+      ? {
+          accountName: currentUser.full_name,
+          accountNumber: currentUser.bank_account_number,
+          bankCode: currentUser.bank_code || '058',
+          bankName: currentUser.bank_name || 'Guaranty Trust Bank (GTB)',
+          recipientCode: currentUser.recipient_code || currentUser.paystack_recipient_code || ''
+        }
+      : null
+  );
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -706,6 +720,15 @@ export const ListingWizard: React.FC<ListingWizardProps> = ({
                 />
               </div>
             )}
+
+            {/* Automated Payout Setup & Bank Verification */}
+            <div className="pt-2">
+              <BankVerificationCard
+                userId={currentUser.id}
+                onVerified={(data) => setBankRecipient(data)}
+                initialData={bankRecipient}
+              />
+            </div>
           </div>
         )}
 
@@ -740,14 +763,21 @@ export const ListingWizard: React.FC<ListingWizardProps> = ({
               <ChevronRight className="w-4 h-4" />
             </button>
           ) : (
-            <button
-              type="button"
-              onClick={handleSubmit}
-              disabled={isSubmitting}
-              className="px-8 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-xs font-extrabold text-slate-950 flex items-center gap-2 transition-all shadow-xl shadow-emerald-500/30 cursor-pointer"
-            >
-              {isSubmitting ? 'Publishing...' : 'Publish Verified Listing'}
-            </button>
+            <div className="flex flex-col sm:flex-row items-end sm:items-center gap-2">
+              {!bankRecipient && (
+                <span className="text-[11px] text-amber-400/90 font-medium flex items-center gap-1">
+                  <AlertCircle className="w-3.5 h-3.5" /> Payout account required
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={handleSubmit}
+                disabled={isSubmitting || !bankRecipient}
+                className="px-8 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 disabled:opacity-40 disabled:hover:from-emerald-500 disabled:hover:to-teal-500 text-xs font-extrabold text-slate-950 flex items-center gap-2 transition-all shadow-xl shadow-emerald-500/30 cursor-pointer disabled:cursor-not-allowed"
+              >
+                {isSubmitting ? 'Publishing...' : 'Publish Verified Listing'}
+              </button>
+            </div>
           )}
         </div>
       </div>

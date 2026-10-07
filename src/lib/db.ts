@@ -445,6 +445,13 @@ class DatabaseStore {
     return this.users.find((u) => u.id === id);
   }
 
+  updateUser(id: string, data: Partial<User>): User | null {
+    const user = this.users.find((u) => u.id === id);
+    if (!user) return null;
+    Object.assign(user, data, { updated_at: new Date().toISOString() });
+    return user;
+  }
+
   // Hubs
   getHubs(): InspectionHub[] {
     return this.hubs.filter((h) => h.is_active);
