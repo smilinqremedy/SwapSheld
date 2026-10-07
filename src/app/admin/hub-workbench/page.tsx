@@ -12,9 +12,11 @@ import {
   Lock, 
   Smartphone,
   ExternalLink,
-  ArrowLeft
+  ArrowLeft,
+  Camera
 } from "lucide-react";
 import Link from "next/link";
+import { CameraBarcodeScanner } from "@/components/CameraBarcodeScanner";
 
 interface OrderLookup {
   id: string;
@@ -39,6 +41,10 @@ export default function HubWorkbenchPage() {
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [actionMessage, setActionMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  // Scanner Modal State
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [scannerTarget, setScannerTarget] = useState<"imei" | "search">("imei");
 
   // Bench Form States
   const [scannedImei, setScannedImei] = useState("");
@@ -204,8 +210,19 @@ export default function HubWorkbenchPage() {
               placeholder="Scan Waybill Barcode, Escrow ID (e.g., ord_active_48h), or Order UUID..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-12 pr-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+              className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-12 pr-12 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
             />
+            <button
+              type="button"
+              onClick={() => {
+                setScannerTarget("search");
+                setIsScannerOpen(true);
+              }}
+              title="Scan Waybill Barcode with Camera"
+              className="absolute right-3 top-2.5 p-1.5 rounded-lg text-slate-400 hover:text-emerald-400 hover:bg-slate-800/80 transition cursor-pointer"
+            >
+              <Camera className="w-5 h-5" />
+            </button>
           </div>
           <button
             type="submit"
@@ -302,13 +319,27 @@ export default function HubWorkbenchPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-950 p-4 rounded-xl border border-slate-800">
                 <div className="space-y-2">
                   <label className="text-xs font-medium text-slate-300">Scan Hardware IMEI / Serial</label>
-                  <input
-                    type="text"
-                    placeholder="Enter or scan IMEI 1..."
-                    value={scannedImei}
-                    onChange={(e) => setScannedImei(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm font-mono focus:ring-1 focus:ring-emerald-500 outline-none text-slate-200"
-                  />
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="Enter or scan IMEI 1..."
+                      value={scannedImei}
+                      onChange={(e) => setScannedImei(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm font-mono focus:ring-1 focus:ring-emerald-500 outline-none text-slate-200"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setScannerTarget("imei");
+                        setIsScannerOpen(true);
+                      }}
+                      title="Scan IMEI Barcode with Camera"
+                      className="bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border border-emerald-500/30 rounded-lg px-3 py-2 text-xs font-semibold flex items-center gap-1.5 transition whitespace-nowrap cursor-pointer active:scale-95"
+                    >
+                      <Camera className="w-4 h-4 text-emerald-400" />
+                      <span className="hidden sm:inline">Camera</span>
+                    </button>
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <label className="text-xs font-medium text-slate-300">Security Hologram Seal #</label>
@@ -408,6 +439,19 @@ export default function HubWorkbenchPage() {
             <p className="text-sm">Scan a shipment barcode or search an Order ID above to begin bench verification.</p>
           </div>
         )}
+
+        {/* Interactive Mobile Barcode / IMEI Camera Scanner */}
+        <CameraBarcodeScanner
+          isOpen={isScannerOpen}
+          onClose={() => setIsScannerOpen(false)}
+          onScanSuccess={(text) => {
+            if (scannerTarget === "search") {
+              setSearchQuery(text);
+            } else {
+              setScannedImei(text);
+            }
+          }}
+        />
 
       </div>
     </div>
