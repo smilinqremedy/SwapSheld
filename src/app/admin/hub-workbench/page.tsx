@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { CameraBarcodeScanner } from "@/components/CameraBarcodeScanner";
+import { validateIMEI, formatIMEI } from "@/lib/imei-validator";
 
 interface OrderLookup {
   id: string;
@@ -51,6 +52,9 @@ export default function HubWorkbenchPage() {
   const [tamperSealNumber, setTamperSealNumber] = useState("");
   const [tamperSealIntact, setTamperSealIntact] = useState(false);
   const [notes, setNotes] = useState("");
+
+  // Validate IMEI using Luhn checksum formula
+  const imeiValidation = scannedImei.trim() ? validateIMEI(scannedImei) : null;
 
   const [checklist, setChecklist] = useState({
     imeiMatched: false,
@@ -112,7 +116,7 @@ export default function HubWorkbenchPage() {
             battery_health_percentage: 94,
             screen_status: "ORIGINAL",
             face_id_or_biometrics: "WORKING",
-            expected_hash: "8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918",
+            expected_hash: "32ada5ff2d596097068c3ccf5b2f7c0a501c2c128ac6e2953225fd3625d24e3e",
           },
         });
         setLoading(false);
@@ -340,6 +344,19 @@ export default function HubWorkbenchPage() {
                       <span className="hidden sm:inline">Camera</span>
                     </button>
                   </div>
+                  {/* Inline Luhn Checksum Feedback */}
+                  {scannedImei.trim() && !imeiValidation?.isValid && (
+                    <div className="flex items-center gap-1.5 text-xs text-rose-400 bg-rose-500/10 border border-rose-500/20 px-2.5 py-1.5 rounded-lg font-medium">
+                      <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
+                      <span>{imeiValidation?.error || "Invalid IMEI Checksum (Luhn check failed)"}</span>
+                    </div>
+                  )}
+                  {scannedImei.trim() && imeiValidation?.isValid && (
+                    <div className="flex items-center gap-1.5 text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1.5 rounded-lg font-medium">
+                      <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" />
+                      <span>Valid IMEI (Luhn verified: {formatIMEI(scannedImei)})</span>
+                    </div>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <label className="text-xs font-medium text-slate-300">Security Hologram Seal #</label>

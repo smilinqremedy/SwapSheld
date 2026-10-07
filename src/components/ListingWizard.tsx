@@ -14,7 +14,10 @@ import {
   AlertCircle,
   FileCheck,
   ChevronRight,
-  ChevronLeft
+  ChevronLeft,
+  Trash2,
+  Loader2,
+  Image as ImageIcon
 } from 'lucide-react';
 import {
   GadgetCategory,
@@ -26,6 +29,8 @@ import {
   GadgetListing
 } from '@/types';
 import { evaluateDevice } from '@/lib/valuation-engine';
+import { compressImageWithStats, formatFileSize } from '@/lib/image-compressor';
+import { validateIMEI, formatIMEI } from '@/lib/imei-validator';
 
 interface ListingWizardProps {
   currentUser: User;
@@ -49,7 +54,7 @@ export const ListingWizard: React.FC<ListingWizardProps> = ({
   const [storageCapacity, setStorageCapacity] = useState<string>('128GB');
   const [ram, setRam] = useState<string>('8GB');
   const [color, setColor] = useState<string>('Natural Titanium');
-  const [imeiOrSerial, setImeiOrSerial] = useState<string>('356892110488219');
+  const [imeiOrSerial, setImeiOrSerial] = useState<string>('356892110488210');
 
   // Diagnostics
   const [batteryHealth, setBatteryHealth] = useState<number>(92);
@@ -70,6 +75,80 @@ export const ListingWizard: React.FC<ListingWizardProps> = ({
     'https://images.unsplash.com/photo-1695048133142-1a20484d2569?w=800&auto=format&fit=crop&q=80',
     'https://images.unsplash.com/photo-1592750475338-74b7b21085ab?w=800&auto=format&fit=crop&q=80'
   ]);
+
+  // Client-side WebP Compressed Proof Media
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
+  const [isCompressing, setIsCompressing] = useState<boolean>(false);
+  const [proofImages, setProofImages] = useState<Array<{
+    id: string;
+    name: string;
+    originalSize: number;
+    compressedSize: number;
+    savingsText: string;
+    savingsPercentage: number;
+    previewUrl: string;
+  }>>([
+    {
+      id: 'demo-1',
+      name: '3uTools_Diagnostic_Report.webp',
+      originalSize: 6501171, // 6.2 MB
+      compressedSize: 188416, // 184 KB
+      savingsText: 'Compressed from 6.2MB to 184KB',
+      savingsPercentage: 97,
+      previewUrl: 'https://images.unsplash.com/photo-1592750475338-74b7b21085ab?w=800&auto=format&fit=crop&q=80'
+    }
+  ]);
+
+  // IMEI Luhn validator for Step 1
+  const wizardImeiValidation = imeiOrSerial.trim() ? validateIMEI(imeiOrSerial) : null;
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    setIsCompressing(true);
+    const newItems: Array<{
+      id: string;
+      name: string;
+      originalSize: number;
+      compressedSize: number;
+      savingsText: string;
+      savingsPercentage: number;
+      previewUrl: string;
+    }> = [];
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      try {
+        const stats = await compressImageWithStats(file, { maxWidth: 1600, quality: 0.75 });
+        const previewUrl = URL.createObjectURL(stats.file);
+
+        newItems.push({
+          id: `${Date.now()}-${i}`,
+          name: stats.file.name,
+          originalSize: stats.originalSize,
+          compressedSize: stats.compressedSize,
+          savingsText: stats.savingsText,
+          savingsPercentage: stats.savingsPercentage,
+          previewUrl
+        });
+
+        setMediaUrls((prev) => [...prev, previewUrl]);
+      } catch (err) {
+        console.error('Image compression failed:', err);
+      }
+    }
+
+    setProofImages((prev) => [...prev, ...newItems]);
+    setIsCompressing(false);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleRemoveImage = (id: string) => {
+    setProofImages((prev) => prev.filter((img) => img.id !== id));
+  };
 
   // Algorithmic evaluation of current device inputs
   const currentEval = evaluateDevice({
@@ -274,8 +353,20 @@ export const ListingWizard: React.FC<ListingWizardProps> = ({
                 value={imeiOrSerial}
                 onChange={(e) => setImeiOrSerial(e.target.value)}
                 placeholder="Enter 15-digit IMEI or Apple Serial Number"
-                className="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 text-xs sm:text-sm text-slate-200 focus:outline-none focus:border-emerald-500"
+                className="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 text-xs sm:text-sm text-slate-200 focus:outline-none focus:border-emerald-500 font-mono"
               />
+              {imeiOrSerial.trim() && !wizardImeiValidation?.isValid && (
+                <div className="flex items-center gap-1.5 text-xs text-rose-400 bg-rose-500/10 border border-rose-500/20 px-2.5 py-1.5 rounded-lg font-medium">
+                  <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                  <span>{wizardImeiValidation?.error || "Invalid IMEI Checksum (Luhn check failed)"}</span>
+                </div>
+              )}
+              {imeiOrSerial.trim() && wizardImeiValidation?.isValid && (
+                <div className="flex items-center gap-1.5 text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1.5 rounded-lg font-medium">
+                  <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" />
+                  <span>Valid IMEI (Luhn checksum verified: {formatIMEI(imeiOrSerial)})</span>
+                </div>
+              )}
               <p className="text-[11px] text-slate-400">
                 Serial will be cryptographically hashed (SHA-256) on public listings to prevent cloning. Only revealed to the buyer once funds are safely in escrow.
               </p>
@@ -425,23 +516,97 @@ export const ListingWizard: React.FC<ListingWizardProps> = ({
               Step 3: Upload Diagnostic Screenshots & Proof
             </h3>
 
-            <div className="border-2 border-dashed border-slate-800 hover:border-emerald-500/50 rounded-2xl p-8 text-center bg-slate-950/60 transition-colors">
-              <Upload className="w-10 h-10 text-emerald-400 mx-auto mb-3" />
-              <h4 className="text-sm font-bold text-white">
-                Upload 3uTools / CoconutBattery / iOS Diagnostic Report
-              </h4>
-              <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto">
-                High-resolution proof protects you from buyers making false claims during the 48-hour escrow window.
-              </p>
-              <div className="mt-4 flex flex-wrap justify-center gap-2">
-                <span className="px-3 py-1 bg-slate-800 rounded-full text-[11px] text-slate-300">
-                  ✓ 3uTools Test Score 98% attached
-                </span>
-                <span className="px-3 py-1 bg-slate-800 rounded-full text-[11px] text-slate-300">
-                  ✓ 360 Exterior Photo attached
-                </span>
-              </div>
+            {/* Hidden file input */}
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileUpload}
+              accept="image/*"
+              multiple
+              className="hidden"
+            />
+
+            {/* Interactive Upload Card */}
+            <div
+              onClick={() => fileInputRef.current?.click()}
+              className="border-2 border-dashed border-slate-800 hover:border-emerald-500/50 rounded-2xl p-8 text-center bg-slate-950/60 transition-colors cursor-pointer group"
+            >
+              {isCompressing ? (
+                <div className="py-4 space-y-3">
+                  <Loader2 className="w-10 h-10 text-emerald-400 mx-auto animate-spin" />
+                  <h4 className="text-sm font-bold text-white">Compressing Images to WebP...</h4>
+                  <p className="text-xs text-slate-400">
+                    Applying client-side canvas compression for rapid Nigerian network uploads (&lt;250KB)
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <Upload className="w-10 h-10 text-emerald-400 mx-auto mb-3 group-hover:scale-110 transition-transform" />
+                  <h4 className="text-sm font-bold text-white">
+                    Upload 3uTools / CoconutBattery / Hardware Proof Photos
+                  </h4>
+                  <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto">
+                    Select device photos or screenshots. Images are automatically compressed to lightweight WebP (&lt;250KB) in your browser before upload.
+                  </p>
+                  <div className="mt-4 flex items-center justify-center gap-2">
+                    <span className="px-3 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border border-emerald-500/30 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition">
+                      <Camera className="w-3.5 h-3.5" /> Select Images to Compress &amp; Upload
+                    </span>
+                  </div>
+                </>
+              )}
             </div>
+
+            {/* Attached Proof Media List with Savings Badges */}
+            {proofImages.length > 0 && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-slate-300">
+                    Diagnostic Proof Attachments ({proofImages.length})
+                  </label>
+                  <span className="text-[11px] text-emerald-400 font-mono">
+                    ✓ Browser WebP Compression Active
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {proofImages.map((img) => (
+                    <div
+                      key={img.id}
+                      className="bg-slate-950 border border-slate-800 rounded-xl p-3 flex items-center gap-3 relative group"
+                    >
+                      <div className="w-14 h-14 rounded-lg bg-slate-900 border border-slate-800 flex-shrink-0 overflow-hidden relative">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={img.previewUrl}
+                          alt={img.name}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                      <div className="flex-1 min-w-0 space-y-1">
+                        <p className="text-xs font-medium text-slate-200 truncate">{img.name}</p>
+                        {/* Compression Savings Badge */}
+                        <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                          <CheckCircle2 className="w-3 h-3 flex-shrink-0" />
+                          <span>{img.savingsText}</span>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRemoveImage(img.id);
+                        }}
+                        title="Remove image"
+                        className="text-slate-500 hover:text-rose-400 p-1.5 rounded-lg hover:bg-slate-900 transition cursor-pointer"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div>
               <label className="text-xs font-semibold text-slate-300 block mb-1">
